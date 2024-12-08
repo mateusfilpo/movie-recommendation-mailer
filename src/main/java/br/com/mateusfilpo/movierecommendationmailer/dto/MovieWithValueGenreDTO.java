@@ -1,4 +1,4 @@
-package br.com.mateusfilpo.movierecommendationmailer.model;
+package br.com.mateusfilpo.movierecommendationmailer.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 

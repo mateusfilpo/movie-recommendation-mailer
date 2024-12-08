@@ -1,26 +1,40 @@
 package br.com.mateusfilpo.movierecommendationmailer.client;
 
-import br.com.mateusfilpo.movierecommendationmailer.model.MovieWithValueGenreDTO;
-import br.com.mateusfilpo.movierecommendationmailer.model.MovieWithValueGenreDTOPageImpl;
+import br.com.mateusfilpo.movierecommendationmailer.dto.*;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
 
+import java.util.Base64;
 import java.util.List;
 
 @Service
 public class ClientImpl implements Client {
 
     private final RestTemplateBuilder restTemplateBuilder;
+
+    @Value("${login.username}")
+    private String username;
+
+    @Value("${login.password}")
+    private String password;
+
+    @Value("${security.client-id}")
+    private String clientId;
+
+    @Value("${security.client-secret}")
+    private String clientSecret;
 
     public static final String RECOMMENDED_MOVIE_PATH = "/users/{id}/recommended-movies?pageNumber=0&pageSize=5";
 
@@ -38,7 +52,7 @@ public class ClientImpl implements Client {
                 .toUriString();
 
         HttpHeaders headers = new HttpHeaders();
-        headers.set("Authorization", "Bearer eyJraWQiOiI4OWM2YWY2OC05OTJkLTQwODktODYyYy0xODEzMjkwMmUwZjgiLCJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJteWNsaWVudGlkIiwiYXVkIjoibXljbGllbnRpZCIsIm5iZiI6MTczMzUxNTc1NSwiaXNzIjoiaHR0cDovL2xvY2FsaG9zdDo5MDAwIiwiZXhwIjoxNzMzNjAyMTU1LCJpYXQiOjE3MzM1MTU3NTUsImp0aSI6ImEyNGJmZTUwLTM3OGUtNDhiYi1hZmRkLWQwZWMyOTg5Y2M4ZiIsImF1dGhvcml0aWVzIjpbIlJPTEVfVVNFUiIsIlJPTEVfQURNSU4iXSwidXNlcm5hbWUiOiJtYXRldXNmaWxwbyJ9.fQSz5v6NO0-FICVx_bZNfEPOJTB9-_s6ptg_5VtNNTQImZXmNmhBn0O2cOW7q_otjMnUKnc8TNsHxJFR81zIY95fwlI909nHsx1MQMIVTW0zo9dvLcVcybvWm4bkV6ZK1CQHm6aWmsvC1LJKhRXzWp8fZolOLvTmkCFhQZ0OQIA5VhMxLP3wIS6xGUMZcmYUYYLXuocHtx-ZOsCpbd6iikbIWNtW9N5eJR6x0dKf5AdylTKsyI1WL8YOfd9Bj0U5c8lNOFsMDFFpUxoPd_4__HgkjnvtlNSBvfofVVTaDlknrpwlgfxjIlresK0k0mniFOyi43gyiBlt8QTxWXSCTw");
+        headers.setBearerAuth(authenticateUser(new LoginRequestDTO(username, password)).getToken());
 
         HttpEntity<Void> entity = new HttpEntity<>(headers);
 
@@ -52,5 +66,55 @@ public class ClientImpl implements Client {
         return response.getBody();
     }
 
+    @Override
+    public TokenResponseDTO authenticateUser(LoginRequestDTO loginRequest) {
+        RestTemplate restTemplate = restTemplateBuilder.rootUri("http://localhost:9000").build();
 
+        String uri = "/oauth2/token";
+
+        String credentials = String.format("%s:%s", clientId, clientSecret);
+        String base64Credentials = Base64.getEncoder().encodeToString(credentials.getBytes());
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(org.springframework.http.MediaType.APPLICATION_FORM_URLENCODED);
+        headers.set("Authorization", "Basic " + base64Credentials);
+
+        MultiValueMap<String, String> formData = new LinkedMultiValueMap<>();
+        formData.add("username", loginRequest.getUsername());
+        formData.add("password", loginRequest.getPassword());
+        formData.add("grant_type", "password");
+
+        HttpEntity<MultiValueMap<String, String>> entity = new HttpEntity<>(formData, headers);
+
+        ResponseEntity<TokenResponseDTO> response = restTemplate.exchange(
+                uri,
+                HttpMethod.POST,
+                entity,
+                TokenResponseDTO.class
+        );
+
+        return response.getBody();
+    }
+
+    @Override
+    public List<UserDTO> getUsers() {
+        RestTemplate restTemplate = restTemplateBuilder.build();
+
+        String uri = "/users";
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(authenticateUser(new LoginRequestDTO(username, password)).getToken());
+
+
+        HttpEntity<String> entity = new HttpEntity<>(headers);
+
+        ResponseEntity<List<UserDTO>> response = restTemplate.exchange(
+                uri,
+                HttpMethod.GET,
+                entity,
+                new ParameterizedTypeReference<List<UserDTO>>() {}
+        );
+
+        return response.getBody();
+    }
 }
